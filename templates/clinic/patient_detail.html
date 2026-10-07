@@ -11,4 +11,5 @@
 <div class="wide"><dt>Address</dt><dd>{{ patient.address|default:'Not provided'|linebreaksbr }}</dd></div>
 </dl></section>
 <section class="panel"><h2>Clinical history</h2><p>{{ patient.clinical_history|default:'No clinical history recorded.'|linebreaksbr }}</p></section>
+<section class="panel"><div class="section-heading"><h2>Bookings & visits</h2>{% if user.role != 'doctor' %}<a class="button" href="{% url 'booking_create' %}?patient={{ patient.pk }}">Book this patient</a>{% endif %}</div><div class="table-wrap"><table><thead><tr><th>Booking</th><th>Date</th><th>Type</th><th>Status</th></tr></thead><tbody>{% for booking in bookings %}<tr><td><a href="{% url 'booking_detail' booking.pk %}">{{ booking.number }}</a></td><td>{{ booking.scheduled_date }}</td><td>{{ booking.get_kind_display }}</td><td>{{ booking.get_status_display }}</td></tr>{% empty %}<tr><td colspan="4" class="empty">No bookings yet.</td></tr>{% endfor %}</tbody></table></div></section>
 {% endblock %}

@@ -8,9 +8,10 @@ from django.db import transaction
 from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.cache import never_cache
+from django.utils import timezone
 
 from .forms import PatientForm, ServiceForm, StaffForm
-from .models import AuditEvent, Patient, Service, User
+from .models import AuditEvent, Booking, Patient, Service, User
 
 
 def roles_required(*roles):
@@ -38,6 +39,7 @@ def dashboard(request):
         'patient_count': Patient.objects.count(),
         'service_count': Service.objects.filter(is_active=True).count(),
         'recent_patients': Patient.objects.all()[:5],
+        'today_bookings': Booking.objects.filter(scheduled_date=timezone.localdate()).exclude(status='cancelled').count(),
     })
 
 
@@ -61,7 +63,8 @@ def patient_list(request):
 
 @roles_required(User.Role.ADMIN, User.Role.OPERATOR, User.Role.DOCTOR)
 def patient_detail(request, pk):
-    return render(request, 'clinic/patient_detail.html', {'patient': get_object_or_404(Patient, pk=pk)})
+    patient = get_object_or_404(Patient, pk=pk)
+    return render(request, 'clinic/patient_detail.html', {'patient': patient, 'bookings': patient.bookings.all()[:15]})
 
 
 @roles_required(User.Role.ADMIN, User.Role.OPERATOR)

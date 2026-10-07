@@ -11,10 +11,18 @@
   <nav aria-label="Main navigation">
     <a href="{% url 'dashboard' %}" {% if request.resolver_match.url_name == 'dashboard' %}aria-current="page"{% endif %}>Overview</a>
     <a href="{% url 'patient_list' %}" {% if 'patient' in request.resolver_match.url_name %}aria-current="page"{% endif %}>Patients</a>
+    <a href="{% url 'booking_list' %}" {% if 'booking' in request.resolver_match.url_name %}aria-current="page"{% endif %}>Bookings</a>
+    <a href="{% url 'queue' %}" {% if request.resolver_match.url_name == 'queue' %}aria-current="page"{% endif %}>Today's queue</a>
     <a href="{% url 'service_list' %}" {% if 'service' in request.resolver_match.url_name %}aria-current="page"{% endif %}>Services</a>
     {% if user.role == 'admin' %}
+    <a href="{% url 'discount_list' %}">Discount approvals</a>
+    <a href="{% url 'cash_report' %}">Cash reports</a>
+    <a href="{% url 'patient_reports' %}">Patient reports</a>
+    <a href="{% url 'template_list' %}">Report templates</a>
+    <a href="{% url 'diagnosis_list' %}">Diseases & diagnoses</a>
     <a href="{% url 'staff_list' %}" {% if 'staff' in request.resolver_match.url_name %}aria-current="page"{% endif %}>Users & access</a>
     <a href="{% url 'audit_list' %}" {% if request.resolver_match.url_name == 'audit_list' %}aria-current="page"{% endif %}>Activity log</a>
+    <a href="{% url 'backup_page' %}">Backups</a>
     {% endif %}
   </nav>
   <div class="sidebar-footer"><strong>{{ user.get_full_name|default:user.username }}</strong><span>{{ user.get_role_display }} portal</span>

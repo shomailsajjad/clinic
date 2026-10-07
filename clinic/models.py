@@ -1,4 +1,5 @@
 from decimal import Decimal
+import uuid
 
 from django.conf import settings
 from django.contrib.auth.models import AbstractUser, UserManager
@@ -104,3 +105,208 @@ class AuditEvent(models.Model):
 
     class Meta:
         ordering = ['-created_at', '-pk']
+
+
+class Booking(models.Model):
+    class Kind(models.TextChoices):
+        WALK_IN = 'walk_in', 'Walk-in'
+        APPOINTMENT = 'appointment', 'Appointment'
+
+    class Status(models.TextChoices):
+        BOOKED = 'booked', 'Booked'
+        ARRIVED = 'arrived', 'Arrived'
+        COMPLETED = 'completed', 'Completed'
+        CANCELLED = 'cancelled', 'Cancelled'
+
+    request_id = models.UUIDField(default=uuid.uuid4, unique=True)
+    patient = models.ForeignKey(Patient, on_delete=models.PROTECT, related_name='bookings')
+    patient_snapshot = models.JSONField(default=dict)
+    age_years = models.DecimalField(max_digits=6, decimal_places=2)
+    kind = models.CharField(max_length=12, choices=Kind.choices)
+    scheduled_date = models.DateField()
+    scheduled_time = models.TimeField(null=True, blank=True)
+    referring_doctor = models.CharField(max_length=160, blank=True)
+    clinical_history = models.TextField(blank=True)
+    status = models.CharField(max_length=12, choices=Status.choices, default=Status.BOOKED)
+    created_by = models.ForeignKey(User, on_delete=models.PROTECT)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ['-scheduled_date', '-pk']
+
+    @property
+    def number(self):
+        return f'B-{self.pk:06d}'
+
+    @property
+    def gross(self):
+        return sum((line.price for line in self.items.all()), Decimal('0.00'))
+
+    @property
+    def discount(self):
+        return sum((line.discount for line in self.items.all()), Decimal('0.00'))
+
+    @property
+    def due(self):
+        return self.gross - self.discount
+
+    @property
+    def has_paid(self):
+        return self.transactions.filter(kind='collection').exists()
+
+    @property
+    def net_collected(self):
+        total = Decimal('0.00')
+        for entry in self.transactions.all():
+            total += entry.amount if entry.kind == 'collection' else -entry.amount
+        return total
+
+
+class BookingItem(models.Model):
+    booking = models.ForeignKey(Booking, on_delete=models.PROTECT, related_name='items')
+    service = models.ForeignKey(Service, on_delete=models.PROTECT)
+    service_name = models.CharField(max_length=100)
+    price = models.DecimalField(max_digits=10, decimal_places=2)
+    discount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    status = models.CharField(max_length=12, choices=Booking.Status.choices, default=Booking.Status.BOOKED)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['booking', 'service'], name='one_service_per_booking'),
+            models.CheckConstraint(condition=models.Q(price__gte=0, discount__gte=0) & models.Q(discount__lte=models.F('price')), name='valid_booked_price'),
+        ]
+
+    @property
+    def current_token(self):
+        return self.tokens.filter(is_active=True).first()
+
+
+class TokenCounter(models.Model):
+    service = models.ForeignKey(Service, on_delete=models.PROTECT)
+    date = models.DateField()
+    last_number = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['service', 'date'], name='one_daily_counter')]
+
+
+class Token(models.Model):
+    item = models.ForeignKey(BookingItem, on_delete=models.PROTECT, related_name='tokens')
+    service = models.ForeignKey(Service, on_delete=models.PROTECT)
+    date = models.DateField()
+    number = models.PositiveIntegerField()
+    prefix = models.CharField(max_length=8)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ['date', 'service_id', 'number']
+        constraints = [
+            models.UniqueConstraint(fields=['service', 'date', 'number'], name='unique_daily_token'),
+            models.UniqueConstraint(fields=['item'], condition=models.Q(is_active=True), name='one_active_token_per_item'),
+        ]
+
+    @property
+    def label(self):
+        return f'{self.prefix}-{self.number:03d}'
+
+
+class DiscountRequest(models.Model):
+    item = models.ForeignKey(BookingItem, on_delete=models.PROTECT, related_name='discount_requests')
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    reason = models.CharField(max_length=500)
+    status = models.CharField(max_length=10, choices=[('pending', 'Pending'), ('approved', 'Approved'), ('rejected', 'Rejected')], default='pending')
+    requested_by = models.ForeignKey(User, on_delete=models.PROTECT, related_name='discount_requests')
+    reviewed_by = models.ForeignKey(User, on_delete=models.PROTECT, null=True, related_name='discount_reviews')
+    created_at = models.DateTimeField(default=timezone.now)
+    reviewed_at = models.DateTimeField(null=True)
+
+
+class MoneyTransaction(models.Model):
+    class Kind(models.TextChoices):
+        COLLECTION = 'collection', 'Collection'
+        REFUND = 'refund', 'Refund'
+        REVERSAL = 'reversal', 'Correction reversal'
+
+    class Method(models.TextChoices):
+        CASH = 'cash', 'Cash'
+        BANK = 'bank', 'Bank transfer'
+        CARD = 'card', 'Card'
+        EASYPAISA = 'easypaisa', 'Easypaisa'
+        JAZZCASH = 'jazzcash', 'JazzCash'
+
+    request_id = models.UUIDField(default=uuid.uuid4, unique=True)
+    booking = models.ForeignKey(Booking, on_delete=models.PROTECT, related_name='transactions')
+    original = models.ForeignKey('self', on_delete=models.PROTECT, null=True, blank=True, related_name='adjustments')
+    kind = models.CharField(max_length=12, choices=Kind.choices)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    method = models.CharField(max_length=10, choices=Method.choices)
+    reference = models.CharField(max_length=120, blank=True)
+    reason = models.CharField(max_length=500, blank=True)
+    snapshot = models.JSONField(default=dict)
+    created_by = models.ForeignKey(User, on_delete=models.PROTECT)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ['-created_at', '-pk']
+        constraints = [models.CheckConstraint(condition=models.Q(amount__gt=0), name='transaction_amount_positive')]
+
+    @property
+    def receipt_number(self):
+        prefix = {'collection': 'R', 'refund': 'RF', 'reversal': 'RV'}[self.kind]
+        return f'{prefix}-{self.pk:07d}'
+
+
+class Diagnosis(models.Model):
+    name = models.CharField(max_length=160, unique=True)
+    code = models.CharField(max_length=30, blank=True)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ['name']
+
+    def __str__(self):
+        return f'{self.name} ({self.code})' if self.code else self.name
+
+
+class ReportTemplate(models.Model):
+    name = models.CharField(max_length=160)
+    service = models.ForeignKey(Service, on_delete=models.PROTECT)
+    disease_group = models.CharField(max_length=160, blank=True)
+    fields = models.JSONField(default=list)
+    findings = models.TextField()
+    impression = models.TextField()
+    is_active = models.BooleanField(default=True)
+    version = models.PositiveIntegerField(default=1)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['service__name', 'name']
+
+    def __str__(self):
+        return self.name
+
+
+class ReportVersion(models.Model):
+    item = models.ForeignKey(BookingItem, on_delete=models.PROTECT, related_name='reports')
+    version = models.PositiveIntegerField()
+    previous = models.OneToOneField('self', on_delete=models.PROTECT, null=True, blank=True, related_name='revision')
+    template = models.ForeignKey(ReportTemplate, on_delete=models.PROTECT)
+    template_snapshot = models.JSONField(default=dict)
+    patient_snapshot = models.JSONField(default=dict)
+    values = models.JSONField(default=dict)
+    findings = models.TextField()
+    impression = models.TextField()
+    diagnoses = models.ManyToManyField(Diagnosis)
+    diagnosis_snapshot = models.JSONField(default=list)
+    finalized = models.BooleanField(default=False)
+    revision_reason = models.CharField(max_length=500, blank=True)
+    author = models.ForeignKey(User, on_delete=models.PROTECT)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ['-version']
+        constraints = [models.UniqueConstraint(fields=['item', 'version'], name='unique_report_version')]
+
+    @property
+    def is_revision(self):
+        return self.item.reports.filter(version__lt=self.version, finalized=True).exists()

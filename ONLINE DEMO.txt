@@ -28,9 +28,9 @@ accounts can reset on restart/redeployment. A new admin is initialized from
 your secure setting after a reset; existing admin passwords are not silently
 overwritten. Persistent hosting and PostgreSQL are separate deployment work.
 
-The demo includes login/roles, patients, services/pricing, users and an
-activity log. Booking, generated tokens, finance, diagnostic reports and
-backups remain unimplemented. The login throttle is per username, stored
+The demo includes login/roles, patients, services, bookings/tokens, payments,
+discounts/refunds, report templates/revisions, analysis and verified backups.
+See docs/USER_GUIDE.md for a testing walkthrough. The login throttle is per username, stored
 in process memory, and resets when the service restarts. This is not a
 production security or deployment configuration.
 

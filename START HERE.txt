@@ -1,5 +1,5 @@
 SAJJAD POLY CLINIC AND DIAGNOSTIC CENTER
-Windows testing package - application foundation
+Windows testing package - clinic workflow implementation
 
 1. Right-click the downloaded ZIP file and choose Extract All.
    Open the extracted clinic folder. Do not run files from inside the ZIP.
@@ -31,10 +31,15 @@ Use sample data only. This package is for testing on ONE Windows computer.
 It uses a local development database and is not yet a multi-computer clinic
 installation. Once installed, normal use does not need internet.
 
-Included: login/roles, patient registration/search/editing, service prices,
-user management and an activity log.
-Not yet included: bookings, generated tokens, payments, discounts, refunds,
-diagnostic reports, financial reports or backup/restore.
+Included: login/roles, patients, services, user management, appointments,
+walk-ins, daily service tokens, payments, admin-approved discounts, refunds,
+receipts, doctor report templates/revisions, analytics, and verified backups.
+Read docs/USER_GUIDE.md for the sequence to test.
+
+Windows/LAN setup, PostgreSQL integration, physical printers, and automatic
+backup scheduling still need verification before real patient use.
+Double-click Backup Clinic.bat to choose an existing external-drive folder
+and create a verified backup. See docs/BACKUPS.md for restoration.
 
 This ZIP contains source code and convenience launchers, not a standalone
 EXE installer. The application has passed its tests in the Linux cloud

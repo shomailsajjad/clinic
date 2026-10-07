@@ -1,5 +1,6 @@
 from django.urls import path
 from . import views
+from . import portal
 
 urlpatterns = [
     path('', views.dashboard, name='dashboard'),
@@ -14,4 +15,31 @@ urlpatterns = [
     path('users/new/', views.staff_edit, name='staff_create'),
     path('users/<int:pk>/edit/', views.staff_edit, name='staff_edit'),
     path('audit/', views.audit_list, name='audit_list'),
+    path('bookings/', portal.booking_list, name='booking_list'),
+    path('bookings/new/', portal.booking_create, name='booking_create'),
+    path('bookings/<int:pk>/', portal.booking_detail, name='booking_detail'),
+    path('bookings/<int:pk>/reschedule/', portal.booking_reschedule, name='booking_reschedule'),
+    path('bookings/<int:pk>/status/', portal.booking_status, name='booking_status'),
+    path('bookings/<int:pk>/tokens/', portal.token_print, name='token_print'),
+    path('queue/', portal.queue, name='queue'),
+    path('items/<int:pk>/discount/', portal.discount_request, name='discount_request'),
+    path('discounts/', portal.discount_list, name='discount_list'),
+    path('discounts/<int:pk>/review/', portal.discount_review, name='discount_review'),
+    path('bookings/<int:pk>/payment/', portal.payment_create, name='payment_create'),
+    path('payments/<int:pk>/refund/', portal.payment_refund, name='payment_refund'),
+    path('payments/<int:pk>/correct/', portal.payment_correct, name='payment_correct'),
+    path('receipts/<int:pk>/', portal.receipt, name='receipt'),
+    path('reports/cash/', portal.cash_report, name='cash_report'),
+    path('reports/patients/', portal.patient_reports, name='patient_reports'),
+    path('diagnoses/', portal.diagnosis_list, name='diagnosis_list'),
+    path('diagnoses/new/', portal.diagnosis_edit, name='diagnosis_create'),
+    path('diagnoses/<int:pk>/edit/', portal.diagnosis_edit, name='diagnosis_edit'),
+    path('templates/', portal.template_list, name='template_list'),
+    path('templates/new/', portal.template_edit, name='template_create'),
+    path('templates/<int:pk>/edit/', portal.template_edit, name='template_edit'),
+    path('items/<int:pk>/report/', portal.report_edit, name='report_edit'),
+    path('clinical-reports/<int:pk>/', portal.report_detail, name='report_detail'),
+    path('clinical-reports/<int:pk>/print/', portal.report_print, name='report_print'),
+    path('backups/', portal.backup_page, name='backup_page'),
+    path('backups/download/', portal.backup_download, name='backup_download'),
 ]

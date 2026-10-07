@@ -6,7 +6,7 @@ Offline clinic software for Dr. Asfa Batool (FCPS Radiology, MBBS).
 installation or hosting payment needed. Images show invented patients and
 illustrative prices; they are a visual walkthrough, not an interactive demo.
 
-## Implemented foundation
+## Implemented clinic workflows
 
 - Admin, operator and doctor accounts with server-enforced permissions.
 - Login, POST-only logout, password validation and account deactivation.
@@ -16,7 +16,15 @@ illustrative prices; they are a visual walkthrough, not an interactive demo.
 - Admin user management and activity log recording actor, record, timestamp and changed field names.
 - Responsive screens with locally bundled assets and clinic branding.
 
-Bookings, token generation, financial transactions, discounts, refunds, diagnostic templates/revisions, administrative reports and backup/restore are **planned but not implemented**. Service token prefixes do not yet generate tokens. The activity log records changed field names; full clinical/financial version history will be implemented with those modules.
+- Appointment and walk-in bookings with multi-service daily tokens, queues, arrival, cancellation and rescheduling.
+- Immutable booked prices and patient/age snapshots; daily counters use the Pakistan clinic date.
+- Admin-approved discounts; full payment at booking with mandatory digital reference numbers.
+- 80 mm token/payment/refund print layouts; admin refunds and payment-method/reference corrections preserve the original ledger.
+- Admin report templates with editable measurements, structured diagnoses, doctor-only A4 report printing and preserved report versions.
+- Cash/refund/net reports by date/method/posting user, patient age/disease/referral/service analysis, and CSV exports.
+- Verified database backup downloads and command-line restore into a separate database; a Windows external-drive helper.
+
+This is a development implementation. Windows/LAN installation, PostgreSQL integration/concurrency, physical printing and automatic daily backup scheduling remain to be validated. Use synthetic patients until deployment checks are complete.
 
 ## Cloud development
 
@@ -96,6 +104,8 @@ line endings for direct use after downloading a ZIP.
 
 Run `python manage.py test` with the configured virtual environment. The foundation suite exercises role restrictions, authentication, CSRF, patient validation/search, pricing, account management and audit records using synthetic data.
 
-Next stages: (1) bookings and concurrent daily service tokens, (2) payments/receipts, admin discount approvals/refunds/corrections, (3) report templates and doctor-only versioned reporting, (4) financial and patient analytics, (5) Windows/LAN deployment, 80 mm/A4 printer validation and external-drive backup/restore.
+Remaining deployment work: PostgreSQL host provisioning and integration checks, Windows service/firewall/LAN HTTPS setup, 80 mm/A4 printer validation, backup retention/encryption and scheduled daily external-drive backups. There is no turnkey Windows installer yet.
+
+See [the user guide](docs/USER_GUIDE.md) for the workflow and [backup instructions](docs/BACKUPS.md) for restore and scheduling. Financial corrections currently change a payment's method/reference while preserving its amount; the operator must collect the exact approved charge. Partial payments are outside the agreed initial scope. Restore is intentionally performed into a separate database, not by overwriting live records.
 
 PostgreSQL operation and Windows deployment have not yet been validated. Partial payments remain outside the initial full-payment-at-booking assumption.
