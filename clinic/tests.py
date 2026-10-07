@@ -1,8 +1,13 @@
 from datetime import timedelta
 from decimal import Decimal
+from io import StringIO
+from unittest.mock import patch
 
 from django.db import IntegrityError, transaction
-from django.test import Client, TestCase
+from django.core.cache import cache
+from django.core.management import call_command
+from django.core.management.base import CommandError
+from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
@@ -213,3 +218,68 @@ class ClinicWorkflowTests(TestCase):
         self.assertContains(response, '&lt;script&gt;')
         self.assertNotContains(response, '<script>')
         self.assertIn('no-store', response.headers['Cache-Control'])
+
+
+class DemoDeploymentTests(TestCase):
+    def setUp(self):
+        cache.clear()
+        self.addCleanup(cache.clear)
+
+    def test_failed_logins_are_throttled_and_can_resume_after_expiry(self):
+        User.objects.create_user('synthetic_login', password='Synthetic-Test-Only!482')
+        for _ in range(5):
+            response = self.client.post(reverse('login'), {'username': 'synthetic_login', 'password': 'wrong'})
+            self.assertEqual(response.status_code, 200)
+        response = self.client.post(reverse('login'), {
+            'username': 'synthetic_login', 'password': 'Synthetic-Test-Only!482'})
+        self.assertEqual(response.status_code, 429)
+        self.assertNotIn('_auth_user_id', self.client.session)
+        cache.clear()  # Represents expiry of the fifteen-minute attempt window.
+        response = self.client.post(reverse('login'), {
+            'username': 'synthetic_login', 'password': 'Synthetic-Test-Only!482'})
+        self.assertRedirects(response, reverse('dashboard'))
+
+    def test_successful_login_resets_failed_attempts(self):
+        User.objects.create_user('synthetic_login', password='Synthetic-Test-Only!482')
+        for _ in range(4):
+            self.client.post(reverse('login'), {'username': 'synthetic_login', 'password': 'wrong'})
+        self.assertEqual(self.client.post(reverse('login'), {
+            'username': 'synthetic_login', 'password': 'Synthetic-Test-Only!482'}).status_code, 302)
+        self.client.post(reverse('logout'))
+        for _ in range(4):
+            self.assertEqual(self.client.post(reverse('login'), {
+                'username': 'synthetic_login', 'password': 'wrong'}).status_code, 200)
+
+    @override_settings(CLINIC_DEMO_MODE=False)
+    def test_demo_bootstrap_refuses_normal_clinic_configuration(self):
+        with self.assertRaises(CommandError):
+            call_command('bootstrap_demo')
+        self.assertFalse(User.objects.exists())
+
+    @override_settings(CLINIC_DEMO_MODE=True)
+    def test_demo_bootstrap_requires_a_secure_password(self):
+        for password in ['', '12345678']:
+            with patch.dict('os.environ', {'CLINIC_DEMO_ADMIN_PASSWORD': password}):
+                with self.assertRaises(CommandError):
+                    call_command('bootstrap_demo')
+        self.assertFalse(User.objects.exists())
+
+    @override_settings(CLINIC_DEMO_MODE=True)
+    def test_demo_bootstrap_is_repeatable_and_never_resets_existing_password(self):
+        output = StringIO()
+        password = 'Synthetic-Demo-Only!954'
+        with patch.dict('os.environ', {'CLINIC_DEMO_ADMIN_PASSWORD': password}):
+            call_command('bootstrap_demo', stdout=output)
+        user = User.objects.get(username='admin')
+        self.assertEqual(user.role, 'admin')
+        self.assertTrue(user.check_password(password))
+        original_hash = user.password
+        with patch.dict('os.environ', {'CLINIC_DEMO_ADMIN_PASSWORD': 'Different-Synthetic!934'}):
+            call_command('bootstrap_demo', stdout=output)
+        user.refresh_from_db()
+        self.assertEqual(user.password, original_hash)
+        self.assertEqual(User.objects.count(), 1)
+        self.assertNotIn(password, output.getvalue())
+        self.assertFalse(Patient.objects.exists())
+        self.assertFalse(Service.objects.exists())
+        self.assertContains(self.client.get(reverse('login')), 'Testing demo.')

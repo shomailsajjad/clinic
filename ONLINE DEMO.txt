@@ -1,0 +1,33 @@
+ONLINE TESTING ON RENDER
+
+This prepares a browser-based demo, not the finished clinical system.
+The demo has no real patient data. Never enter real patient data.
+
+1. Sign in at https://dashboard.render.com using GitHub.
+2. Choose New > Blueprint and connect shomailsajjad/clinic.
+   If the repository is private, grant Render access to that repository.
+3. Render reads render.yaml and proposes a free testing web service.
+   Confirm that the displayed plan is free before creating anything.
+4. Set CLINIC_DEMO_ADMIN_PASSWORD in Render's secure form. Choose a unique
+   password with at least 12 characters. Do not send the password in chat.
+5. Create/deploy the blueprint and wait until the service is live.
+6. Open the service's HTTPS address shown in Render. Your login username
+   is admin; the password is the one you entered in Render.
+7. Create Operator and Doctor accounts under Users & access.
+
+The real web address is assigned by Render. No hosted demo is live until
+Render confirms deployment. Free services may sleep and can be slow on
+the first visit. Free service terms and availability are controlled by Render.
+
+This testing demo uses temporary SQLite storage. Patients, prices and user
+accounts can reset on restart/redeployment. A new admin is initialized from
+your secure setting after a reset; existing admin passwords are not silently
+overwritten. Persistent hosting and PostgreSQL are separate deployment work.
+
+The demo includes login/roles, patients, services/pricing, users and an
+activity log. Booking, generated tokens, finance, diagnostic reports and
+backups remain unimplemented. The login throttle is per username, stored
+in process memory, and resets when the service restarts. This is not a
+production security or deployment configuration.
+
+If deployment fails, share the error text from Render's Logs; omit secrets.

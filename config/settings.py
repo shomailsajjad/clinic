@@ -19,6 +19,11 @@ if not SECRET_KEY:
 
 DEBUG = os.environ.get('CLINIC_DEBUG', '0') == '1'
 ALLOWED_HOSTS = os.environ.get('CLINIC_ALLOWED_HOSTS', 'localhost,127.0.0.1,[::1]').split(',')
+RENDER_HOST = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
+if RENDER_HOST:
+    ALLOWED_HOSTS.append(RENDER_HOST)
+CSRF_TRUSTED_ORIGINS = [f'https://{RENDER_HOST}'] if RENDER_HOST else []
+CLINIC_DEMO_MODE = os.environ.get('CLINIC_DEMO_MODE', '0') == '1'
 INSTALLED_APPS = [
     'django.contrib.auth', 'django.contrib.contenttypes', 'django.contrib.sessions',
     'django.contrib.messages', 'django.contrib.staticfiles', 'clinic',
@@ -41,6 +46,7 @@ TEMPLATES = [{
         'django.template.context_processors.request',
         'django.contrib.auth.context_processors.auth',
         'django.contrib.messages.context_processors.messages',
+        'clinic.context_processors.deployment',
     ]},
 }]
 WSGI_APPLICATION = 'config.wsgi.application'
@@ -82,5 +88,8 @@ SESSION_EXPIRE_AT_BROWSER_CLOSE = True
 CSRF_COOKIE_SECURE = os.environ.get('CLINIC_HTTPS', '0') == '1'
 SESSION_COOKIE_SECURE = CSRF_COOKIE_SECURE
 SECURE_SSL_REDIRECT = CSRF_COOKIE_SECURE
+# Enable proxy trust only on Render, whose ingress supplies this header.
+if RENDER_HOST:
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = 'DENY'

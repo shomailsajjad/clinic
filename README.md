@@ -74,6 +74,22 @@ All date displays use Asia/Karachi. Do not put credentials in scripts, chat, ver
 
 ## Validation and next stages
 
+### Optional hosted testing demo
+
+`render.yaml` describes a single-instance Render demo using temporary SQLite
+storage. Follow `ONLINE DEMO.txt` to deploy it through your own account.
+No deployment has been created by adding this configuration. Set the demo
+password in Render's secure dashboard; never commit it. The demo explicitly
+marks its pages as testing-only and can reset all records after a restart.
+Render supplies the actual HTTPS URL after deployment. Use invented patients
+only, and confirm the displayed service plan before creating it.
+
+Login attempts are limited to five failures per username over fifteen minutes
+using a process-local cache. This suits the single-instance demo; a production
+deployment needs a shared limiter and broader deployment review. Windows
+launchers retain their console windows on failures and are stored with CRLF
+line endings for direct use after downloading a ZIP.
+
 Run `python manage.py test` with the configured virtual environment. The foundation suite exercises role restrictions, authentication, CSRF, patient validation/search, pricing, account management and audit records using synthetic data.
 
 Next stages: (1) bookings and concurrent daily service tokens, (2) payments/receipts, admin discount approvals/refunds/corrections, (3) report templates and doctor-only versioned reporting, (4) financial and patient analytics, (5) Windows/LAN deployment, 80 mm/A4 printer validation and external-drive backup/restore.

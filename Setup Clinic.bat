@@ -1,13 +1,20 @@
 @echo off
+if /i "%~1" neq "run" (
+    "%ComSpec%" /k ""%~f0" run"
+    exit /b
+)
 setlocal
 cd /d "%~dp0"
 echo Sajjad Poly Clinic - first-time setup
+echo Folder: %CD%
 echo Internet is needed to download dependencies during setup.
 echo.
 if not exist ".venv\Scripts\python.exe" (
     py -3.12 -m venv .venv
     if errorlevel 1 goto python_missing
 )
+".venv\Scripts\python.exe" --version
+if errorlevel 1 goto python_missing
 ".venv\Scripts\python.exe" -m pip install --require-hashes -r requirements.txt
 if errorlevel 1 goto failed
 ".venv\Scripts\python.exe" manage.py migrate --noinput

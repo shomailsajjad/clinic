@@ -1,0 +1,25 @@
+# Public testing only. Free service storage is ephemeral; never use real patients.
+services:
+  - type: web
+    name: sajjad-clinic-demo
+    runtime: python
+    plan: free
+    autoDeploy: false
+    buildCommand: pip install --require-hashes -r requirements.txt && python manage.py collectstatic --noinput
+    startCommand: python manage.py migrate --noinput && python manage.py bootstrap_demo && python serve.py
+    healthCheckPath: /login/
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.10
+      - key: CLINIC_BIND_HOST
+        value: 0.0.0.0
+      - key: CLINIC_HTTPS
+        value: "1"
+      - key: CLINIC_DEBUG
+        value: "0"
+      - key: CLINIC_DEMO_MODE
+        value: "1"
+      - key: CLINIC_SECRET_KEY
+        generateValue: true
+      - key: CLINIC_DEMO_ADMIN_PASSWORD
+        sync: false

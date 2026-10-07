@@ -25,6 +25,7 @@
 <main>
   <header class="topbar"><span>Dr. Asfa Batool <small>FCPS Radiology, MBBS</small></span><span class="chip">Clinic workspace</span></header>
   <div class="content">
+  {% if clinic_demo_mode %}<div class="notice" role="status"><strong>Testing demo.</strong> Use invented patients only. Records may reset whenever this demo restarts or is updated.</div>{% endif %}
   {% for message in messages %}<div class="notice {{ message.tags }}" role="status">{{ message }}</div>{% endfor %}
   {% block content %}{% endblock %}
   </div>
