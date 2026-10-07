@@ -6,6 +6,15 @@ Multi-clinic software for Sajjad Healthcare: radiology and doctor consultation, 
 installation or hosting payment needed. Images show invented patients and
 illustrative prices; they are a visual walkthrough, not an interactive demo.
 
+## Website deployment on cPanel
+
+Download [the cPanel application ZIP](downloads/clinic-cpanel.zip) and follow
+[the cPanel installation guide](deploy/CPANEL.md). The hosting plan must support
+Python applications (Python 3.12 and Passenger). Upload the package outside
+`public_html`, configure your domain, create your admin and restart the Python app.
+Website testing uses standalone mode so booking and doctor workflows work online;
+central mode is for a later rollout with separate branch servers.
+
 ## Multi-clinic and OPD
 
 - Organization and branch ownership with one active doctor per clinic.

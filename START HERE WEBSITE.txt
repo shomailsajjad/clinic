@@ -1,0 +1,13 @@
+SAJJAD CLINIC — CPANEL WEBSITE PACKAGE
+
+1. Upload clinic-cpanel.zip to your cPanel home folder and extract it.
+   It creates a folder called clinic. Keep it outside public_html.
+2. Open Setup Python App. Choose Python 3.12, application root clinic,
+   startup passenger_wsgi.py, and entry point application.
+3. Follow deploy/CPANEL.md to configure your domain, install requirements,
+   create your admin login, enable SSL, and restart the application.
+4. Visit your HTTPS clinic domain to test with invented patient data.
+
+There is no default password. Choose yours during admin setup.
+If you need help, give deploy/CPANEL.md to your hosting support team.
+This is a Django/Python application, not a PHP website.

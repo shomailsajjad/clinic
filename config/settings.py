@@ -28,9 +28,9 @@ ALLOWED_HOSTS = os.environ.get('CLINIC_ALLOWED_HOSTS', ','.join(node_config.get(
 RENDER_HOST = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
 if RENDER_HOST:
     ALLOWED_HOSTS.append(RENDER_HOST)
-CSRF_TRUSTED_ORIGINS = [origin for origin in os.environ.get('CLINIC_CSRF_TRUSTED_ORIGINS', '').split(',') if origin]
+CSRF_TRUSTED_ORIGINS = [origin for origin in os.environ.get('CLINIC_CSRF_TRUSTED_ORIGINS', ','.join(node_config.get('csrf_trusted_origins', []))).split(',') if origin]
 if RENDER_HOST: CSRF_TRUSTED_ORIGINS.append(f'https://{RENDER_HOST}')
-CLINIC_DEMO_MODE = os.environ.get('CLINIC_DEMO_MODE', '0') == '1'
+CLINIC_DEMO_MODE = os.environ.get('CLINIC_DEMO_MODE', '1' if node_config.get('demo') else '0') == '1'
 if CLINIC_NODE_MODE not in ['standalone', 'central', 'branch']:
     raise ValueError('Invalid CLINIC_NODE_MODE.')
 INSTALLED_APPS = [
@@ -95,7 +95,7 @@ SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = 'Lax'
 SESSION_COOKIE_AGE = 3600
 SESSION_EXPIRE_AT_BROWSER_CLOSE = True
-CSRF_COOKIE_SECURE = os.environ.get('CLINIC_HTTPS', '0') == '1'
+CSRF_COOKIE_SECURE = os.environ.get('CLINIC_HTTPS', '1' if node_config.get('https') else '0') == '1'
 SESSION_COOKIE_SECURE = CSRF_COOKIE_SECURE
 SECURE_SSL_REDIRECT = CSRF_COOKIE_SECURE
 # Enable proxy trust only on Render, whose ingress supplies this header.
