@@ -9,9 +9,11 @@ from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.cache import never_cache
 from django.utils import timezone
+from django.conf import settings
 
 from .forms import PatientForm, ServiceForm, StaffForm
 from .models import AuditEvent, Booking, Patient, Service, User
+from .access import can_read_local_history, is_owner
 
 
 def roles_required(*roles):
@@ -20,7 +22,8 @@ def roles_required(*roles):
         @login_required
         @wraps(view)
         def wrapped(request, *args, **kwargs):
-            if request.user.role not in roles:
+            allowed = request.user.role in roles or (is_owner(request.user) and User.Role.ADMIN in roles)
+            if not allowed or (request.user.clinic_id and not request.user.clinic.is_active):
                 raise PermissionDenied
             return view(request, *args, **kwargs)
         return wrapped
@@ -36,16 +39,16 @@ def audit(request, action, record, fields):
 @roles_required(User.Role.ADMIN, User.Role.OPERATOR, User.Role.DOCTOR)
 def dashboard(request):
     return render(request, 'clinic/dashboard.html', {
-        'patient_count': Patient.objects.count(),
-        'service_count': Service.objects.filter(is_active=True).count(),
-        'recent_patients': Patient.objects.all()[:5],
-        'today_bookings': Booking.objects.filter(scheduled_date=timezone.localdate()).exclude(status='cancelled').count(),
+        'patient_count': Patient.objects.for_user(request.user).count(),
+        'service_count': Service.objects.for_user(request.user).filter(is_active=True).count(),
+        'recent_patients': Patient.objects.for_user(request.user).all()[:5],
+        'today_bookings': Booking.objects.for_user(request.user).filter(scheduled_date=timezone.localdate()).exclude(status='cancelled').count(),
     })
 
 
 @roles_required(User.Role.ADMIN, User.Role.OPERATOR, User.Role.DOCTOR)
 def patient_list(request):
-    patients = Patient.objects.all()
+    patients = Patient.objects.for_user(request.user).all()
     query = request.GET.get('q', '').strip()[:160]
     if query:
         matching = Q(name__icontains=query) | Q(phone__icontains=query)
@@ -53,24 +56,38 @@ def patient_list(request):
         if normalized.isdigit():
             matching |= Q(cnic=normalized)
         number = query.upper().removeprefix('SPC-')
+        import uuid
+        try:
+            matching |= Q(global_id=uuid.UUID(query.removeprefix('P-')))
+        except ValueError:
+            pass
         if number.isdigit() and len(number) <= 18:
             matching |= Q(pk=int(number))
         patients = patients.filter(matching)
-    return render(request, 'clinic/patient_list.html', {
+    from .models import RemoteRecord
+    remote = RemoteRecord.objects.filter(organization=request.user.organization, entity_type='patient').exclude(global_id__in=Patient.objects.for_user(request.user).values('global_id'))
+    if query:
+        remote = remote.filter(Q(payload__name__icontains=query) | Q(payload__phone__icontains=query) | Q(payload__cnic=query.replace('-', '')))
+    return render(request, 'clinic/patient_list.html', {'directory': remote.select_related('clinic')[:50],
         'page': Paginator(patients, 20).get_page(request.GET.get('page')), 'query': query,
     })
 
 
 @roles_required(User.Role.ADMIN, User.Role.OPERATOR, User.Role.DOCTOR)
 def patient_detail(request, pk):
-    patient = get_object_or_404(Patient, pk=pk)
-    return render(request, 'clinic/patient_detail.html', {'patient': patient, 'bookings': patient.bookings.all()[:15]})
+    patient = get_object_or_404(Patient.objects.for_user(request.user), pk=pk)
+    return render(request, 'clinic/patient_detail.html', {'patient': patient,
+        'can_read_history': can_read_local_history(request.user, patient.owner_clinic),
+        'can_edit_patient': request.user.clinic_id == patient.owner_clinic_id and request.user.role in ['admin', 'operator'],
+        'bookings': Booking.objects.for_user(request.user).filter(patient=patient)[:15]})
 
 
 @roles_required(User.Role.ADMIN, User.Role.OPERATOR)
 def patient_edit(request, pk=None):
-    patient = get_object_or_404(Patient, pk=pk) if pk else None
-    form = PatientForm(request.POST or None, instance=patient)
+    patient = get_object_or_404(Patient.objects.for_user(request.user), pk=pk) if pk else None
+    if settings.CLINIC_NODE_MODE == 'central' or is_owner(request.user) or (patient and patient.owner_clinic_id != request.user.clinic_id):
+        raise PermissionDenied
+    form = PatientForm(request.POST or None, instance=patient, user=request.user)
     if request.method == 'POST' and form.is_valid():
         with transaction.atomic():
             record = form.save(commit=False)
@@ -88,13 +105,13 @@ def patient_edit(request, pk=None):
 
 @roles_required(User.Role.ADMIN, User.Role.OPERATOR, User.Role.DOCTOR)
 def service_list(request):
-    return render(request, 'clinic/service_list.html', {'services': Service.objects.all()})
+    return render(request, 'clinic/service_list.html', {'services': Service.objects.for_user(request.user).all()})
 
 
 @roles_required(User.Role.ADMIN)
 def service_edit(request, pk=None):
-    service = get_object_or_404(Service, pk=pk) if pk else None
-    form = ServiceForm(request.POST or None, instance=service)
+    service = get_object_or_404(Service.objects.for_user(request.user), pk=pk) if pk else None
+    form = ServiceForm(request.POST or None, instance=service, user=request.user)
     if request.method == 'POST' and form.is_valid():
         with transaction.atomic():
             record = form.save()
@@ -109,16 +126,16 @@ def service_edit(request, pk=None):
 
 @roles_required(User.Role.ADMIN)
 def staff_list(request):
-    return render(request, 'clinic/staff_list.html', {'staff': User.objects.order_by('username')})
+    return render(request, 'clinic/staff_list.html', {'staff': User.objects.for_user(request.user).order_by('username')})
 
 
 @roles_required(User.Role.ADMIN)
 def staff_edit(request, pk=None):
-    staff = get_object_or_404(User, pk=pk) if pk else None
-    form = StaffForm(request.POST or None, instance=staff)
+    staff = get_object_or_404(User.objects.for_user(request.user), pk=pk) if pk else None
+    form = StaffForm(request.POST or None, instance=staff, user=request.user)
     if request.method == 'POST' and form.is_valid():
         if staff and staff.pk == request.user.pk and (
-            form.cleaned_data['role'] != User.Role.ADMIN or not form.cleaned_data['is_active']
+            form.cleaned_data['role'] != request.user.role or not form.cleaned_data['is_active']
         ):
             form.add_error(None, 'You cannot deactivate or remove the admin role from your own account.')
         else:
@@ -135,7 +152,7 @@ def staff_edit(request, pk=None):
 
 @roles_required(User.Role.ADMIN)
 def audit_list(request):
-    events = AuditEvent.objects.select_related('actor')
+    events = AuditEvent.objects.for_user(request.user).select_related('actor')
     return render(request, 'clinic/audit_list.html', {
         'page': Paginator(events, 30).get_page(request.GET.get('page')),
     })

@@ -5,7 +5,7 @@
 <link rel="stylesheet" href="{% static 'clinic/app.css' %}"></head>
 <body>
 <aside class="sidebar">
-  <a class="brand" href="{% url 'dashboard' %}"><span class="brand-mark" aria-hidden="true">✚</span><span>Sajjad Poly Clinic<small>and Diagnostic Center</small></span></a>
+  <a class="brand" href="{% url 'dashboard' %}"><span class="brand-mark" aria-hidden="true">✚</span><span>{{ active_clinic.name|default:"Clinic organization" }}<small>{{ active_clinic.code }}</small></span></a>
   {% if user.is_authenticated %}
   <p class="nav-label">WORKSPACE</p>
   <nav aria-label="Main navigation">
@@ -14,7 +14,8 @@
     <a href="{% url 'booking_list' %}" {% if 'booking' in request.resolver_match.url_name %}aria-current="page"{% endif %}>Bookings</a>
     <a href="{% url 'queue' %}" {% if request.resolver_match.url_name == 'queue' %}aria-current="page"{% endif %}>Today's queue</a>
     <a href="{% url 'service_list' %}" {% if 'service' in request.resolver_match.url_name %}aria-current="page"{% endif %}>Services</a>
-    {% if user.role == 'admin' %}
+    {% if user.role == 'admin' or user.role == 'owner' %}
+    <a href="{% url 'clinic_list' %}">Clinics & letterheads</a><a href="{% url 'sync_status' %}">Synchronization</a>{% if user.role == 'owner' %}<a href="{% url 'organization_report' %}">Organization reports</a>{% endif %}
     <a href="{% url 'discount_list' %}">Discount approvals</a>
     <a href="{% url 'cash_report' %}">Cash reports</a>
     <a href="{% url 'patient_reports' %}">Patient reports</a>
@@ -31,7 +32,7 @@
   {% else %}<p class="sidebar-note">Patient care, thoughtfully organized.</p>{% endif %}
 </aside>
 <main>
-  <header class="topbar"><span>Dr. Asfa Batool <small>FCPS Radiology, MBBS</small></span><span class="chip">Clinic workspace</span></header>
+  <header class="topbar"><span>{{ active_clinic.doctor_name }} <small>{{ active_clinic.qualifications }}</small></span><span class="chip">Clinic workspace</span></header>
   <div class="content">
   {% if clinic_demo_mode %}<div class="notice" role="status"><strong>Testing demo.</strong> Use invented patients only. Records may reset whenever this demo restarts or is updated.</div>{% endif %}
   {% for message in messages %}<div class="notice {{ message.tags }}" role="status">{{ message }}</div>{% endfor %}

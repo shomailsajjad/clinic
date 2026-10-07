@@ -1,8 +1,22 @@
 from django.urls import path
 from . import views
-from . import portal
+from . import portal, branches
 
 urlpatterns = [
+    path('patients/directory/<uuid:global_id>/use/', branches.activate_patient, name='activate_patient'),
+    path('patients/reconcile/', branches.reconcile_patients, name='reconcile_patients'),
+    path('clinics/', branches.clinic_list, name='clinic_list'),
+    path('clinics/new/', branches.clinic_edit, name='clinic_create'),
+    path('clinics/<int:pk>/edit/', branches.clinic_edit, name='clinic_edit'),
+    path('clinics/<int:pk>/configuration/', branches.branch_configuration, name='branch_configuration'),
+    path('organization/reports/', branches.organization_report, name='organization_report'),
+    path('synchronization/', branches.sync_status, name='sync_status'),
+    path('sync/push/', branches.sync_push),
+    path('sync/pull/', branches.sync_pull),
+    path('bookings/<int:pk>/examine/', branches.opd_edit, name='opd_edit'),
+    path('examinations/<int:pk>/', branches.opd_detail, name='opd_detail'),
+    path('examinations/<int:pk>/print/', branches.opd_print, name='opd_print'),
+    path('patients/<int:pk>/history/', branches.shared_history, name='shared_history'),
     path('', views.dashboard, name='dashboard'),
     path('patients/', views.patient_list, name='patient_list'),
     path('patients/new/', views.patient_edit, name='patient_create'),

@@ -30,7 +30,7 @@ def form_page(request, form, title, back_url, submit='Save'):
 
 @roles_required(*ALL_ROLES)
 def booking_list(request):
-    bookings = Booking.objects.select_related('patient', 'created_by').prefetch_related('items__tokens')
+    bookings = Booking.objects.for_user(request.user).select_related('patient', 'created_by').prefetch_related('items__tokens')
     date_value = request.GET.get('date', '')
     query = request.GET.get('q', '').strip()[:160]
     if date_value:
@@ -50,10 +50,10 @@ def booking_create(request):
     initial = {}
     patient_id = request.GET.get('patient')
     if patient_id:
-        patient = get_object_or_404(Patient, pk=patient_id)
+        patient = get_object_or_404(Patient.objects.for_user(request.user), pk=patient_id)
         initial = {'patient': patient, 'referring_doctor': patient.referring_doctor,
-                   'clinical_history': patient.clinical_history}
-    form = BookingForm(request.POST if request.method == 'POST' else None, initial=initial)
+                   'clinical_history': patient.clinical_history if request.user.clinic_id == patient.owner_clinic_id else ''}
+    form = BookingForm(request.POST if request.method == 'POST' else None, initial=initial, user=request.user)
     if request.method == 'POST' and form.is_valid():
         try:
             booking = workflows.create_booking(request.user, **form.cleaned_data)
@@ -67,20 +67,20 @@ def booking_create(request):
 
 @roles_required(*ALL_ROLES)
 def booking_detail(request, pk):
-    booking = get_object_or_404(Booking.objects.select_related('patient', 'created_by'), pk=pk)
+    booking = get_object_or_404(Booking.objects.for_user(request.user).select_related('patient', 'created_by'), pk=pk)
     items = list(booking.items.select_related('service').prefetch_related('tokens', 'reports'))
     for item in items:
         item.latest_report = item.reports.first()
     return render(request, 'clinic/booking_detail.html', {
-        'booking': booking, 'items': items,
+        'booking': booking, 'items': items, 'has_opd': booking.items.filter(service_category='opd').exists(), 'can_read_history': request.user.role != 'owner',
         'transactions': booking.transactions.select_related('created_by') if request.user.role != 'doctor' else [],
-        'discount_requests': DiscountRequest.objects.filter(item__booking=booking).select_related('item', 'requested_by'),
+        'discount_requests': DiscountRequest.objects.for_user(request.user).filter(item__booking=booking).select_related('item', 'requested_by'),
     })
 
 
 @roles_required(*FRONT_DESK)
 def booking_reschedule(request, pk):
-    booking = get_object_or_404(Booking, pk=pk)
+    booking = get_object_or_404(Booking.objects.for_user(request.user), pk=pk)
     form = RescheduleForm(request.POST if request.method == 'POST' else None,
                           initial={'scheduled_date': booking.scheduled_date, 'scheduled_time': booking.scheduled_time})
     if request.method == 'POST' and form.is_valid():
@@ -97,7 +97,7 @@ def booking_reschedule(request, pk):
 @roles_required(*FRONT_DESK)
 @require_POST
 def booking_status(request, pk):
-    get_object_or_404(Booking, pk=pk)
+    get_object_or_404(Booking.objects.for_user(request.user), pk=pk)
     try:
         workflows.change_booking_status(request.user, pk, request.POST.get('status'))
     except ValidationError as error:
@@ -109,25 +109,25 @@ def booking_status(request, pk):
 
 @roles_required(*ALL_ROLES)
 def queue(request):
-    tokens = Token.objects.filter(date=timezone.localdate(), is_active=True).select_related(
+    tokens = Token.objects.for_user(request.user).filter(date=timezone.localdate(), is_active=True).select_related(
         'service', 'item__booking__patient').order_by('service__name', 'number')
     service = request.GET.get('service', '')
     if service.isdigit():
         tokens = tokens.filter(service_id=int(service))
     from .models import Service
-    return render(request, 'clinic/queue.html', {'tokens': tokens, 'services': Service.objects.filter(is_active=True),
+    return render(request, 'clinic/queue.html', {'tokens': tokens, 'services': Service.objects.for_user(request.user).filter(is_active=True),
                                                'selected_service': service, 'today': timezone.localdate()})
 
 
 @roles_required(*FRONT_DESK)
 def token_print(request, pk):
-    booking = get_object_or_404(Booking, pk=pk)
-    return render(request, 'clinic/token_print.html', {'booking': booking, 'items': booking.items.all()})
+    booking = get_object_or_404(Booking.objects.for_user(request.user), pk=pk)
+    return render(request, 'clinic/token_print.html', {'booking': booking, 'items': booking.items.all(), 'letterhead': booking.clinic_snapshot or booking.clinic.letterhead()})
 
 
 @roles_required(*FRONT_DESK)
 def discount_request(request, pk):
-    item = get_object_or_404(BookingItem, pk=pk)
+    item = get_object_or_404(BookingItem.objects.for_user(request.user), pk=pk)
     form = DiscountForm(request.POST if request.method == 'POST' else None)
     if request.method == 'POST' and form.is_valid():
         try:
@@ -142,14 +142,14 @@ def discount_request(request, pk):
 
 @roles_required(User.Role.ADMIN)
 def discount_list(request):
-    records = DiscountRequest.objects.select_related('item__booking__patient', 'requested_by', 'reviewed_by').order_by('-created_at')
+    records = DiscountRequest.objects.for_user(request.user).select_related('item__booking__patient', 'requested_by', 'reviewed_by').order_by('-created_at')
     return render(request, 'clinic/discount_list.html', {'page': Paginator(records, 30).get_page(request.GET.get('page'))})
 
 
 @roles_required(User.Role.ADMIN)
 @require_POST
 def discount_review(request, pk):
-    get_object_or_404(DiscountRequest, pk=pk)
+    get_object_or_404(DiscountRequest.objects.for_user(request.user), pk=pk)
     action = request.POST.get('action')
     if action not in ['approve', 'reject']:
         messages.error(request, 'Choose approve or reject.')
@@ -165,7 +165,7 @@ def discount_review(request, pk):
 
 @roles_required(*FRONT_DESK)
 def payment_create(request, pk):
-    booking = get_object_or_404(Booking, pk=pk)
+    booking = get_object_or_404(Booking.objects.for_user(request.user), pk=pk)
     form = PaymentForm(request.POST if request.method == 'POST' else None, initial={'amount': booking.due})
     if request.method == 'POST' and form.is_valid():
         try:
@@ -180,7 +180,7 @@ def payment_create(request, pk):
 
 @roles_required(User.Role.ADMIN)
 def payment_refund(request, pk):
-    original = get_object_or_404(MoneyTransaction, pk=pk)
+    original = get_object_or_404(MoneyTransaction.objects.for_user(request.user), pk=pk)
     form = RefundForm(request.POST if request.method == 'POST' else None, initial={'method': original.method})
     if request.method == 'POST' and form.is_valid():
         try:
@@ -195,7 +195,7 @@ def payment_refund(request, pk):
 
 @roles_required(User.Role.ADMIN)
 def payment_correct(request, pk):
-    original = get_object_or_404(MoneyTransaction, pk=pk)
+    original = get_object_or_404(MoneyTransaction.objects.for_user(request.user), pk=pk)
     form = CorrectionForm(request.POST if request.method == 'POST' else None,
                           initial={'method': original.method, 'reference': original.reference})
     if request.method == 'POST' and form.is_valid():
@@ -211,8 +211,8 @@ def payment_correct(request, pk):
 
 @roles_required(*FRONT_DESK)
 def receipt(request, pk):
-    record = get_object_or_404(MoneyTransaction.objects.select_related('created_by', 'original'), pk=pk)
-    return render(request, 'clinic/receipt.html', {'record': record,
+    record = get_object_or_404(MoneyTransaction.objects.for_user(request.user).select_related('created_by', 'original'), pk=pk)
+    return render(request, 'clinic/receipt.html', {'record': record, 'letterhead': record.snapshot.get('clinic', record.booking.clinic.letterhead()),
         'is_reversed': record.adjustments.filter(kind='reversal').exists()})
 
 
@@ -227,7 +227,7 @@ def cash_report(request):
     form, valid = range_data(request)
     rows = MoneyTransaction.objects.none()
     if valid:
-        rows = MoneyTransaction.objects.filter(created_at__date__gte=form.cleaned_data['start'],
+        rows = MoneyTransaction.objects.for_user(request.user).filter(created_at__date__gte=form.cleaned_data['start'],
             created_at__date__lte=form.cleaned_data['end']).select_related('created_by', 'booking__patient')
     totals = {'collection': Decimal('0.00'), 'refund': Decimal('0.00'), 'reversal': Decimal('0.00')}
     methods, operators = {}, {}
@@ -253,13 +253,13 @@ def cash_report(request):
 
 @roles_required(User.Role.ADMIN)
 def diagnosis_list(request):
-    return render(request, 'clinic/diagnosis_list.html', {'diagnoses': Diagnosis.objects.all()})
+    return render(request, 'clinic/diagnosis_list.html', {'diagnoses': Diagnosis.objects.for_user(request.user).all()})
 
 
 @roles_required(User.Role.ADMIN)
 def diagnosis_edit(request, pk=None):
-    diagnosis = get_object_or_404(Diagnosis, pk=pk) if pk else None
-    form = DiagnosisForm(request.POST if request.method == 'POST' else None, instance=diagnosis)
+    diagnosis = get_object_or_404(Diagnosis.objects.for_user(request.user), pk=pk) if pk else None
+    form = DiagnosisForm(request.POST if request.method == 'POST' else None, instance=diagnosis, user=request.user)
     if request.method == 'POST' and form.is_valid():
         with transaction.atomic():
             record = form.save()
@@ -270,13 +270,13 @@ def diagnosis_edit(request, pk=None):
 
 @roles_required(User.Role.ADMIN)
 def template_list(request):
-    return render(request, 'clinic/template_list.html', {'templates': ReportTemplate.objects.select_related('service')})
+    return render(request, 'clinic/template_list.html', {'templates': ReportTemplate.objects.for_user(request.user).select_related('service')})
 
 
 @roles_required(User.Role.ADMIN)
 def template_edit(request, pk=None):
-    template = get_object_or_404(ReportTemplate, pk=pk) if pk else None
-    form = TemplateForm(request.POST if request.method == 'POST' else None, instance=template)
+    template = get_object_or_404(ReportTemplate.objects.for_user(request.user), pk=pk) if pk else None
+    form = TemplateForm(request.POST if request.method == 'POST' else None, instance=template, user=request.user)
     if request.method == 'POST' and form.is_valid():
         with transaction.atomic():
             latest = ReportTemplate.objects.select_for_update().get(pk=pk) if pk else None
@@ -294,8 +294,8 @@ def template_edit(request, pk=None):
 
 @roles_required(User.Role.DOCTOR)
 def report_edit(request, pk):
-    item = get_object_or_404(BookingItem.objects.select_related('booking__patient', 'service'), pk=pk)
-    templates = ReportTemplate.objects.filter(service=item.service, is_active=True)
+    item = get_object_or_404(BookingItem.objects.for_user(request.user).select_related('booking__patient', 'service'), pk=pk)
+    templates = ReportTemplate.objects.for_user(request.user).filter(service=item.service, is_active=True)
     template_id = request.GET.get('template')
     previous = item.reports.first()
     if not template_id and previous and previous.template.is_active:
@@ -303,7 +303,7 @@ def report_edit(request, pk):
     if not template_id:
         return render(request, 'clinic/template_choose.html', {'item': item, 'templates': templates})
     template = get_object_or_404(templates, pk=template_id)
-    form = ReportForm(request.POST if request.method == 'POST' else None, template=template, previous=previous)
+    form = ReportForm(request.POST if request.method == 'POST' else None, template=template, previous=previous, user=request.user)
     if request.method == 'POST' and form.is_valid():
         data = form.cleaned_data.copy()
         try:
@@ -320,14 +320,14 @@ def report_edit(request, pk):
 
 @roles_required(User.Role.DOCTOR)
 def report_detail(request, pk):
-    report = get_object_or_404(ReportVersion.objects.select_related('item__booking', 'author'), pk=pk)
+    report = get_object_or_404(ReportVersion.objects.for_user(request.user).select_related('item__booking', 'author'), pk=pk)
     return render(request, 'clinic/report_detail.html', {'report': report, 'history': report.item.reports.all()})
 
 
 @roles_required(User.Role.DOCTOR)
 def report_print(request, pk):
-    report = get_object_or_404(ReportVersion.objects.select_related('item__booking', 'author'), pk=pk, finalized=True)
-    return render(request, 'clinic/report_print.html', {'report': report,
+    report = get_object_or_404(ReportVersion.objects.for_user(request.user).select_related('item__booking', 'author'), pk=pk, finalized=True)
+    return render(request, 'clinic/report_print.html', {'report': report, 'letterhead': report.item.booking.clinic_snapshot or report.item.booking.clinic.letterhead(),
         'superseded': report.item.reports.filter(version__gt=report.version, finalized=True).exists()})
 
 
@@ -341,16 +341,18 @@ def patient_reports(request):
     form, valid = range_data(request)
     bookings = Booking.objects.none()
     if valid:
-        bookings = Booking.objects.exclude(status='cancelled').filter(
+        bookings = Booking.objects.for_user(request.user).exclude(status='cancelled').filter(
             scheduled_date__gte=form.cleaned_data['start'], scheduled_date__lte=form.cleaned_data['end'])
-    latest_ids = ReportVersion.objects.filter(finalized=True).values('item_id').annotate(latest=Max('pk')).values_list('latest', flat=True)
+    latest_ids = ReportVersion.objects.for_user(request.user).filter(finalized=True).values('item_id').annotate(latest=Max('pk')).values_list('latest', flat=True)
+    from .models import OPDVersion
+    latest_opd_ids = OPDVersion.objects.for_user(request.user).filter(finalized=True).values('booking_id').annotate(latest=Max('pk')).values_list('latest', flat=True)
     diagnosis_id = request.GET.get('diagnosis', '')
     service_id = request.GET.get('service', '')
     referral = request.GET.get('referral', '').strip()[:160]
     if service_id.isdigit():
         bookings = bookings.filter(items__service_id=int(service_id))
     if diagnosis_id.isdigit():
-        bookings = bookings.filter(items__reports__pk__in=latest_ids, items__reports__diagnoses__pk=int(diagnosis_id))
+        bookings = bookings.filter(Q(items__reports__pk__in=latest_ids, items__reports__diagnoses__pk=int(diagnosis_id)) | Q(opd_versions__pk__in=latest_opd_ids, opd_versions__diagnoses__pk=int(diagnosis_id)))
     if referral:
         bookings = bookings.filter(referring_doctor__icontains=referral)
     bookings = bookings.distinct().select_related('patient')
@@ -373,18 +375,20 @@ def patient_reports(request):
         referrals[booking.referring_doctor or 'Not provided'] += 1
         patients.add(booking.patient_id)
     diseases = defaultdict(set)
-    for report in ReportVersion.objects.filter(pk__in=latest_ids, item__booking__in=bookings).prefetch_related('diagnoses'):
+    for report in ReportVersion.objects.for_user(request.user).filter(pk__in=latest_ids, item__booking__in=bookings).prefetch_related('diagnoses'):
         for diagnosis in report.diagnoses.all():
             diseases[diagnosis.name].add(report.item.booking_id)
+    for report in OPDVersion.objects.for_user(request.user).filter(pk__in=latest_opd_ids, booking__in=bookings).prefetch_related('diagnoses'):
+        for diagnosis in report.diagnoses.all(): diseases[diagnosis.name].add(report.booking_id)
     service_counts = defaultdict(int)
-    for item in BookingItem.objects.filter(booking__in=bookings):
+    for item in BookingItem.objects.for_user(request.user).filter(booking__in=bookings):
         service_counts[item.service_name] += 1
     from .models import Service
     return render(request, 'clinic/patient_reports.html', {'form': form, 'page': Paginator(bookings, 30).get_page(request.GET.get('page')),
         'ages': ages.items(), 'referrals': sorted(referrals.items()), 'diseases': [(name, len(ids)) for name, ids in sorted(diseases.items())],
-        'patient_count': len(patients), 'booking_count': bookings.count(), 'diagnoses': Diagnosis.objects.all(),
+        'patient_count': len(patients), 'booking_count': bookings.count(), 'diagnoses': Diagnosis.objects.for_user(request.user).all(),
         'service_counts': sorted(service_counts.items()),
-        'services': Service.objects.all(), 'diagnosis_id': diagnosis_id, 'service_id': service_id, 'referral': referral})
+        'services': Service.objects.for_user(request.user).all(), 'diagnosis_id': diagnosis_id, 'service_id': service_id, 'referral': referral})
 
 
 @roles_required(User.Role.ADMIN)
@@ -395,12 +399,19 @@ def backup_page(request):
     files = sorted(directory.glob('clinic-backup-*.zip'), key=lambda path: path.stat().st_mtime, reverse=True)[:10] if directory.exists() else []
     backups = [{'name': path.name, 'created': datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.get_current_timezone()),
                 'size': path.stat().st_size} for path in files]
-    return render(request, 'clinic/backup.html', {'backups': backups})
+    from .models import RemoteRecord
+    shared = request.user.role == 'owner' or Patient.objects.exclude(owner_clinic_id=request.user.clinic_id).exists() or RemoteRecord.objects.exclude(clinic_id=request.user.clinic_id).exists() or Booking.objects.exclude(clinic_id=request.user.clinic_id).exists()
+    return render(request, 'clinic/backup.html', {'backups': backups, 'shared': shared})
 
 
 @roles_required(User.Role.ADMIN)
 @require_POST
 def backup_download(request):
+    from .models import RemoteRecord
+    from .access import is_owner
+    if is_owner(request.user) or Patient.objects.exclude(owner_clinic_id=request.user.clinic_id).exists() or Booking.objects.exclude(clinic_id=request.user.clinic_id).exists() or RemoteRecord.objects.exclude(clinic_id=request.user.clinic_id).exists():
+        from django.core.exceptions import PermissionDenied
+        raise PermissionDenied('Shared-history backups must be handled by the host administrator, not downloaded through a clinic account.')
     from .backup import create_backup
     try:
         path = create_backup()

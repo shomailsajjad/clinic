@@ -108,3 +108,11 @@ Validate PostgreSQL with two operators, Windows host restart/LAN access, actual
 80 mm and A4 printers, and a restore on the intended host. Configure daily backup
 scheduling, retention and access protection. The software is a development build,
 not yet a verified production clinic installation.
+
+## Multi-clinic consultation and offline synchronization
+
+See [the multi-clinic guide](MULTI_CLINIC.md) for organization/branch access,
+doctor examinations and prescriptions, shared patient history, branch setup,
+outage behavior, synchronization and identity reconciliation. Full database
+downloads are restricted when a server holds shared clinical history; use the
+trusted host administrator for backups.

@@ -17,13 +17,22 @@ if not SECRET_KEY:
         pass
     SECRET_KEY = key_file.read_text(encoding='utf-8').strip()
 
+import json
+node_file = RUNTIME_DIR / 'node.json'
+node_config = json.loads(node_file.read_text(encoding='utf-8')) if node_file.exists() else {}
+NODE_CONFIG = node_config
+CLINIC_NODE_MODE = os.environ.get('CLINIC_NODE_MODE', node_config.get('mode', 'standalone'))
+CLINIC_LOCAL_CODE = os.environ.get('CLINIC_LOCAL_CODE', node_config.get('clinic_code', ''))
 DEBUG = os.environ.get('CLINIC_DEBUG', '0') == '1'
-ALLOWED_HOSTS = os.environ.get('CLINIC_ALLOWED_HOSTS', 'localhost,127.0.0.1,[::1]').split(',')
+ALLOWED_HOSTS = os.environ.get('CLINIC_ALLOWED_HOSTS', ','.join(node_config.get('allowed_hosts', ['localhost','127.0.0.1','[::1]']))).split(',')
 RENDER_HOST = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
 if RENDER_HOST:
     ALLOWED_HOSTS.append(RENDER_HOST)
-CSRF_TRUSTED_ORIGINS = [f'https://{RENDER_HOST}'] if RENDER_HOST else []
+CSRF_TRUSTED_ORIGINS = [origin for origin in os.environ.get('CLINIC_CSRF_TRUSTED_ORIGINS', '').split(',') if origin]
+if RENDER_HOST: CSRF_TRUSTED_ORIGINS.append(f'https://{RENDER_HOST}')
 CLINIC_DEMO_MODE = os.environ.get('CLINIC_DEMO_MODE', '0') == '1'
+if CLINIC_NODE_MODE not in ['standalone', 'central', 'branch']:
+    raise ValueError('Invalid CLINIC_NODE_MODE.')
 INSTALLED_APPS = [
     'django.contrib.auth', 'django.contrib.contenttypes', 'django.contrib.sessions',
     'django.contrib.messages', 'django.contrib.staticfiles', 'clinic',
@@ -35,6 +44,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'clinic.middleware.BranchBindingMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -89,7 +99,9 @@ CSRF_COOKIE_SECURE = os.environ.get('CLINIC_HTTPS', '0') == '1'
 SESSION_COOKIE_SECURE = CSRF_COOKIE_SECURE
 SECURE_SSL_REDIRECT = CSRF_COOKIE_SECURE
 # Enable proxy trust only on Render, whose ingress supplies this header.
-if RENDER_HOST:
+if RENDER_HOST or os.environ.get('CLINIC_PROXY_IP'):
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = 'DENY'
+
+DATA_UPLOAD_MAX_MEMORY_SIZE = 8 * 1024 * 1024

@@ -1,10 +1,19 @@
 # Sajjad Poly Clinic and Diagnostic Center
 
-Offline clinic software for Dr. Asfa Batool (FCPS Radiology, MBBS).
+Multi-clinic software for Sajjad Healthcare: radiology and doctor consultation, with branch-local operation during internet outages.
 
 **[See screenshots of the working application](docs/SCREENSHOTS.md)** — no
 installation or hosting payment needed. Images show invented patients and
 illustrative prices; they are a visual walkthrough, not an interactive demo.
+
+## Multi-clinic and OPD
+
+- Organization and branch ownership with one active doctor per clinic.
+- Doctors alone can read other branches’ finalized clinical history.
+- Examination, structured diagnosis, prescription, branch letterhead printing and preserved revisions.
+- Consolidated branch fee, age, diagnosis and referral reports.
+- Durable branch-to-central synchronization, cached shared history, source-server binding and duplicate-patient reconciliation.
+- Windows sync configuration/worker helpers. See [multi-clinic setup and usage](docs/MULTI_CLINIC.md).
 
 ## Implemented clinic workflows
 

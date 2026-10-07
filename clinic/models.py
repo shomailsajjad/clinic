@@ -8,7 +8,48 @@ from django.db import models
 from django.utils import timezone
 
 
+class ScopedManager(models.Manager):
+    def for_user(self, user):
+        from .access import scope
+        return scope(self.get_queryset(), user)
+
+
+class Organization(models.Model):
+    global_id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    name = models.CharField(max_length=160)
+    objects = ScopedManager()
+
+
+class Clinic(models.Model):
+    global_id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    organization = models.ForeignKey(Organization, on_delete=models.PROTECT)
+    name = models.CharField(max_length=160)
+    code = models.CharField(max_length=16, unique=True, validators=[
+        RegexValidator(r'^[A-Z][A-Z0-9-]{1,15}$', 'Use 2–16 uppercase letters, digits or hyphens.')])
+    address = models.TextField(blank=True, max_length=1000)
+    phone = models.CharField(max_length=30, blank=True)
+    doctor_name = models.CharField(max_length=160, blank=True)
+    qualifications = models.CharField(max_length=160, blank=True)
+    prescription_footer = models.CharField(max_length=500, blank=True)
+    is_active = models.BooleanField(default=True)
+    objects = ScopedManager()
+
+    class Meta:
+        ordering = ['name']
+
+    def letterhead(self):
+        return {key: getattr(self, key) for key in ['name', 'code', 'address', 'phone',
+                'doctor_name', 'qualifications', 'prescription_footer']}
+
+    def __str__(self):
+        return self.name
+
+
 class ClinicUserManager(UserManager):
+    def for_user(self, user):
+        from .access import scope
+        return scope(self.get_queryset(), user)
+
     def create_superuser(self, username, email=None, password=None, **extra_fields):
         extra_fields['role'] = User.Role.ADMIN
         return super().create_superuser(username, email, password, **extra_fields)
@@ -16,12 +57,18 @@ class ClinicUserManager(UserManager):
 
 class User(AbstractUser):
     class Role(models.TextChoices):
+        OWNER = 'owner', 'Organisation admin'
         ADMIN = 'admin', 'Admin'
         OPERATOR = 'operator', 'Operator'
         DOCTOR = 'doctor', 'Doctor'
 
     role = models.CharField(max_length=10, choices=Role.choices, default=Role.OPERATOR)
+    organization = models.ForeignKey(Organization, on_delete=models.PROTECT, default=1)
+    clinic = models.ForeignKey(Clinic, on_delete=models.PROTECT, default=1, null=True, blank=True)
     objects = ClinicUserManager()
+
+    class Meta(AbstractUser.Meta):
+        constraints = [models.UniqueConstraint(fields=['clinic'], condition=models.Q(role='doctor', is_active=True), name='one_active_doctor_per_clinic')]
 
 
 class Patient(models.Model):
@@ -43,7 +90,7 @@ class Patient(models.Model):
     phone = models.CharField(max_length=24, blank=True, validators=[
         RegexValidator(r'^\+?[0-9 ()-]{7,24}$', 'Enter a valid phone number.'),
     ])
-    cnic = models.CharField(max_length=13, unique=True, null=True, blank=True, validators=[
+    cnic = models.CharField(max_length=13, null=True, blank=True, validators=[
         RegexValidator(r'^\d{13}$', 'CNIC must contain 13 digits.'),
     ])
     address = models.TextField(blank=True, max_length=1000)
@@ -52,13 +99,18 @@ class Patient(models.Model):
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
     created_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True)
+    global_id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    organization = models.ForeignKey(Organization, on_delete=models.PROTECT, default=1)
+    owner_clinic = models.ForeignKey(Clinic, on_delete=models.PROTECT, default=1)
+    objects = ScopedManager()
 
     class Meta:
         ordering = ['-created_at', '-pk']
+        constraints = [models.UniqueConstraint(fields=['organization', 'cnic'], name='unique_organisation_cnic')]
 
     @property
     def patient_number(self):
-        return f'SPC-{self.pk:06d}'
+        return f'P-{self.global_id.hex}'
 
     @property
     def age_display(self):
@@ -79,17 +131,25 @@ class Patient(models.Model):
 
 
 class Service(models.Model):
-    name = models.CharField(max_length=100, unique=True)
-    token_prefix = models.CharField(max_length=8, unique=True, validators=[
+    class Category(models.TextChoices):
+        IMAGING = 'imaging', 'Radiology / imaging'
+        OPD = 'opd', 'Doctor consultation / OPD'
+    category = models.CharField(max_length=10, choices=Category.choices, default=Category.IMAGING)
+    clinic = models.ForeignKey(Clinic, on_delete=models.PROTECT, default=1)
+    name = models.CharField(max_length=100)
+    token_prefix = models.CharField(max_length=8, validators=[
         RegexValidator(r'^[A-Z][A-Z0-9]{0,7}$', 'Use 1–8 uppercase letters or digits, starting with a letter.'),
     ])
     price = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(Decimal('0'))])
     is_active = models.BooleanField(default=True)
     updated_at = models.DateTimeField(auto_now=True)
+    objects = ScopedManager()
 
     class Meta:
         ordering = ['name']
-        constraints = [models.CheckConstraint(condition=models.Q(price__gte=0), name='service_price_nonnegative')]
+        constraints = [models.CheckConstraint(condition=models.Q(price__gte=0), name='service_price_nonnegative'),
+                       models.UniqueConstraint(fields=['clinic', 'name'], name='unique_clinic_service_name'),
+                       models.UniqueConstraint(fields=['clinic', 'token_prefix'], name='unique_clinic_token_prefix')]
 
     def __str__(self):
         return self.name
@@ -102,6 +162,7 @@ class AuditEvent(models.Model):
     record_id = models.PositiveBigIntegerField()
     changed_fields = models.JSONField(default=list)
     created_at = models.DateTimeField(default=timezone.now)
+    objects = ScopedManager()
 
     class Meta:
         ordering = ['-created_at', '-pk']
@@ -130,13 +191,16 @@ class Booking(models.Model):
     status = models.CharField(max_length=12, choices=Status.choices, default=Status.BOOKED)
     created_by = models.ForeignKey(User, on_delete=models.PROTECT)
     created_at = models.DateTimeField(default=timezone.now)
+    clinic = models.ForeignKey(Clinic, on_delete=models.PROTECT, default=1)
+    clinic_snapshot = models.JSONField(default=dict)
+    objects = ScopedManager()
 
     class Meta:
         ordering = ['-scheduled_date', '-pk']
 
     @property
     def number(self):
-        return f'B-{self.pk:06d}'
+        return f'{self.clinic.code}-B-{self.pk:06d}'
 
     @property
     def gross(self):
@@ -165,10 +229,12 @@ class Booking(models.Model):
 class BookingItem(models.Model):
     booking = models.ForeignKey(Booking, on_delete=models.PROTECT, related_name='items')
     service = models.ForeignKey(Service, on_delete=models.PROTECT)
+    service_category = models.CharField(max_length=10, default='imaging')
     service_name = models.CharField(max_length=100)
     price = models.DecimalField(max_digits=10, decimal_places=2)
     discount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     status = models.CharField(max_length=12, choices=Booking.Status.choices, default=Booking.Status.BOOKED)
+    objects = ScopedManager()
 
     class Meta:
         constraints = [
@@ -185,6 +251,7 @@ class TokenCounter(models.Model):
     service = models.ForeignKey(Service, on_delete=models.PROTECT)
     date = models.DateField()
     last_number = models.PositiveIntegerField(default=0)
+    objects = ScopedManager()
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=['service', 'date'], name='one_daily_counter')]
@@ -197,6 +264,7 @@ class Token(models.Model):
     number = models.PositiveIntegerField()
     prefix = models.CharField(max_length=8)
     is_active = models.BooleanField(default=True)
+    objects = ScopedManager()
 
     class Meta:
         ordering = ['date', 'service_id', 'number']
@@ -219,6 +287,7 @@ class DiscountRequest(models.Model):
     reviewed_by = models.ForeignKey(User, on_delete=models.PROTECT, null=True, related_name='discount_reviews')
     created_at = models.DateTimeField(default=timezone.now)
     reviewed_at = models.DateTimeField(null=True)
+    objects = ScopedManager()
 
 
 class MoneyTransaction(models.Model):
@@ -245,6 +314,7 @@ class MoneyTransaction(models.Model):
     snapshot = models.JSONField(default=dict)
     created_by = models.ForeignKey(User, on_delete=models.PROTECT)
     created_at = models.DateTimeField(default=timezone.now)
+    objects = ScopedManager()
 
     class Meta:
         ordering = ['-created_at', '-pk']
@@ -253,16 +323,19 @@ class MoneyTransaction(models.Model):
     @property
     def receipt_number(self):
         prefix = {'collection': 'R', 'refund': 'RF', 'reversal': 'RV'}[self.kind]
-        return f'{prefix}-{self.pk:07d}'
+        return f'{self.booking.clinic.code}-{prefix}-{self.pk:07d}'
 
 
 class Diagnosis(models.Model):
-    name = models.CharField(max_length=160, unique=True)
+    organization = models.ForeignKey(Organization, on_delete=models.PROTECT, default=1)
+    name = models.CharField(max_length=160)
     code = models.CharField(max_length=30, blank=True)
     is_active = models.BooleanField(default=True)
+    objects = ScopedManager()
 
     class Meta:
         ordering = ['name']
+        constraints = [models.UniqueConstraint(fields=['organization', 'name'], name='unique_organisation_diagnosis')]
 
     def __str__(self):
         return f'{self.name} ({self.code})' if self.code else self.name
@@ -278,6 +351,7 @@ class ReportTemplate(models.Model):
     is_active = models.BooleanField(default=True)
     version = models.PositiveIntegerField(default=1)
     updated_at = models.DateTimeField(auto_now=True)
+    objects = ScopedManager()
 
     class Meta:
         ordering = ['service__name', 'name']
@@ -302,6 +376,7 @@ class ReportVersion(models.Model):
     revision_reason = models.CharField(max_length=500, blank=True)
     author = models.ForeignKey(User, on_delete=models.PROTECT)
     created_at = models.DateTimeField(default=timezone.now)
+    objects = ScopedManager()
 
     class Meta:
         ordering = ['-version']
@@ -310,3 +385,89 @@ class ReportVersion(models.Model):
     @property
     def is_revision(self):
         return self.item.reports.filter(version__lt=self.version, finalized=True).exists()
+
+
+class OPDVersion(models.Model):
+    booking = models.ForeignKey(Booking, on_delete=models.PROTECT, related_name='opd_versions')
+    version = models.PositiveIntegerField()
+    previous = models.OneToOneField('self', on_delete=models.PROTECT, null=True, blank=True)
+    chief_complaint = models.TextField()
+    history = models.TextField(blank=True)
+    examination = models.TextField()
+    vitals = models.JSONField(default=dict)
+    diagnosis_snapshot = models.JSONField(default=list)
+    diagnoses = models.ManyToManyField(Diagnosis)
+    medicines = models.JSONField(default=list)
+    advice = models.TextField(blank=True)
+    follow_up_date = models.DateField(null=True, blank=True)
+    finalized = models.BooleanField(default=False)
+    revision_reason = models.CharField(max_length=500, blank=True)
+    patient_snapshot = models.JSONField(default=dict)
+    clinic_snapshot = models.JSONField(default=dict)
+    author = models.ForeignKey(User, on_delete=models.PROTECT)
+    created_at = models.DateTimeField(default=timezone.now)
+    objects = ScopedManager()
+
+    class Meta:
+        ordering = ['-version']
+        constraints = [models.UniqueConstraint(fields=['booking', 'version'], name='unique_opd_version')]
+
+    @property
+    def is_revision(self):
+        return self.booking.opd_versions.filter(version__lt=self.version, finalized=True).exists()
+
+
+class SyncOutbox(models.Model):
+    entity_type = models.CharField(max_length=12, choices=[('patient', 'Patient'), ('visit', 'Visit')])
+    entity_id = models.PositiveBigIntegerField()
+    clinic = models.ForeignKey(Clinic, on_delete=models.PROTECT)
+    version = models.PositiveBigIntegerField(default=1)
+    acknowledged_version = models.PositiveBigIntegerField(default=0)
+    updated_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['entity_type', 'entity_id'], name='unique_outbox_entity')]
+
+
+class SyncCredential(models.Model):
+    clinic = models.OneToOneField(Clinic, on_delete=models.PROTECT)
+    token_hash = models.CharField(max_length=64)
+    is_active = models.BooleanField(default=True)
+    node_id = models.UUIDField(null=True, blank=True)
+
+
+class RemoteRecord(models.Model):
+    organization = models.ForeignKey(Organization, on_delete=models.PROTECT)
+    clinic = models.ForeignKey(Clinic, on_delete=models.PROTECT)
+    entity_type = models.CharField(max_length=12)
+    global_id = models.UUIDField()
+    patient_id = models.UUIDField()
+    version = models.PositiveBigIntegerField()
+    payload = models.JSONField()
+    received_at = models.DateTimeField(default=timezone.now)
+    change_number = models.PositiveBigIntegerField(default=0)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['clinic', 'entity_type', 'global_id'], name='unique_remote_record')]
+
+
+class SyncState(models.Model):
+    clinic = models.OneToOneField(Clinic, on_delete=models.PROTECT)
+    cursor = models.PositiveBigIntegerField(default=0)
+    last_success = models.DateTimeField(null=True, blank=True)
+    last_error = models.CharField(max_length=200, blank=True)
+    node_id = models.UUIDField(default=uuid.uuid4)
+
+
+class PatientAlias(models.Model):
+    organization = models.ForeignKey(Organization, on_delete=models.PROTECT)
+    alias_id = models.UUIDField(unique=True)
+    canonical_id = models.UUIDField()
+    approved_by = models.ForeignKey(User, on_delete=models.PROTECT, null=True)
+    reason = models.CharField(max_length=500)
+    created_at = models.DateTimeField(default=timezone.now)
+
+
+class SyncClock(models.Model):
+    organization = models.OneToOneField(Organization, on_delete=models.PROTECT)
+    sequence = models.PositiveBigIntegerField(default=0)

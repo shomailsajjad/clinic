@@ -99,3 +99,28 @@ printing is restricted to the doctor account.
 ## Mobile view
 
 ![Clinic overview on a narrow screen](screenshots/20-mobile-overview.png)
+
+## Multi-clinic and OPD workflow
+
+These screens use invented patients from two separate branch databases and a
+central server. They are screenshots of the working application.
+
+### Organization clinic directory
+
+![Clinic directory](screenshots/21-clinic-directory.png)
+
+### Consolidated branch reports
+
+![Organization reports](screenshots/22-organization-reports.png)
+
+### Doctor examination and prescription entry
+
+![Doctor examination](screenshots/23-doctor-examination.png)
+
+### Prescription on the branch letterhead
+
+![Branch prescription](screenshots/24-branch-prescription.png)
+
+### Read-only history from the other branch, including preserved revisions
+
+![Shared clinical history](screenshots/25-shared-clinical-history.png)

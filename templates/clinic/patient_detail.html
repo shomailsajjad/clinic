@@ -2,7 +2,7 @@
 {% block title %}{{ patient.name }}{% endblock %}
 {% block content %}
 <a class="back" href="{% url 'patient_list' %}">← Patients</a>
-<div class="page-heading"><div><p class="eyebrow">{{ patient.patient_number }}</p><h1>{{ patient.name }}</h1><p class="muted">Registered {{ patient.created_at|date:'d M Y' }}</p></div>{% if user.role != 'doctor' %}<a class="button secondary" href="{% url 'patient_edit' patient.pk %}">Edit patient</a>{% endif %}</div>
+<div class="page-heading"><div><p class="eyebrow">{{ patient.patient_number }}</p><h1>{{ patient.name }}</h1><p class="muted">Registered {{ patient.created_at|date:'d M Y' }} · {{ patient.owner_clinic.name }}</p></div>{% if can_edit_patient %}<a class="button secondary" href="{% url 'patient_edit' patient.pk %}">Edit patient</a>{% endif %}</div>
 <section class="panel"><h2>Patient information</h2><dl class="details">
 <div><dt>Age</dt><dd>{{ patient.age_display }}</dd></div><div><dt>Gender</dt><dd>{{ patient.get_gender_display }}</dd></div>
 <div><dt>Date of birth</dt><dd>{{ patient.date_of_birth|date:'d M Y'|default:'Not provided' }}</dd></div>
@@ -10,6 +10,6 @@
 <div><dt>Referring doctor</dt><dd>{{ patient.referring_doctor|default:'Not provided' }}</dd></div>
 <div class="wide"><dt>Address</dt><dd>{{ patient.address|default:'Not provided'|linebreaksbr }}</dd></div>
 </dl></section>
-<section class="panel"><h2>Clinical history</h2><p>{{ patient.clinical_history|default:'No clinical history recorded.'|linebreaksbr }}</p></section>
+{% if can_read_history %}<section class="panel"><h2>Clinical history</h2><p>{{ patient.clinical_history|default:'No clinical history recorded.'|linebreaksbr }}</p>{% if user.role == 'doctor' %}<a class="button secondary" href="{% url 'shared_history' patient.pk %}">History across clinics</a>{% endif %}</section>{% endif %}
 <section class="panel"><div class="section-heading"><h2>Bookings & visits</h2>{% if user.role != 'doctor' %}<a class="button" href="{% url 'booking_create' %}?patient={{ patient.pk }}">Book this patient</a>{% endif %}</div><div class="table-wrap"><table><thead><tr><th>Booking</th><th>Date</th><th>Type</th><th>Status</th></tr></thead><tbody>{% for booking in bookings %}<tr><td><a href="{% url 'booking_detail' booking.pk %}">{{ booking.number }}</a></td><td>{{ booking.scheduled_date }}</td><td>{{ booking.get_kind_display }}</td><td>{{ booking.get_status_display }}</td></tr>{% empty %}<tr><td colspan="4" class="empty">No bookings yet.</td></tr>{% endfor %}</tbody></table></div></section>
 {% endblock %}
