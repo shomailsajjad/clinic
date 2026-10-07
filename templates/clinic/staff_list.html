@@ -1,0 +1,7 @@
+{% extends 'base.html' %}
+{% block title %}Users & access{% endblock %}
+{% block content %}
+<div class="page-heading"><div><p class="eyebrow">ADMINISTRATION</p><h1>Users & access</h1><p class="muted">Individual accounts for your clinic team.</p></div><a class="button" href="{% url 'staff_create' %}">+ Add user</a></div>
+<section class="panel"><div class="table-wrap"><table><thead><tr><th>User</th><th>Name</th><th>Role</th><th>Status</th><th>Action</th></tr></thead><tbody>
+{% for member in staff %}<tr><td>{{ member.username }}</td><td>{{ member.get_full_name|default:'—' }}</td><td>{{ member.get_role_display }}</td><td>{% if member.is_active %}Active{% else %}Inactive{% endif %}</td><td><a href="{% url 'staff_edit' member.pk %}">Edit</a></td></tr>{% endfor %}</tbody></table></div></section>
+{% endblock %}

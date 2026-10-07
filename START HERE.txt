@@ -1,0 +1,46 @@
+SAJJAD POLY CLINIC AND DIAGNOSTIC CENTER
+Windows testing package - application foundation
+
+1. Right-click the downloaded ZIP file and choose Extract All.
+   Open the extracted clinic folder. Do not run files from inside the ZIP.
+
+2. Install Python 3.12 for Windows if you do not already have it:
+   https://www.python.org/downloads/windows/
+   Choose Python 3.12 for your Windows system. During installation, enable
+   the Python launcher and Add python.exe to PATH.
+
+3. Double-click Setup Clinic.bat.
+   Internet is needed during this first setup to download dependencies.
+   When prompted, choose your own admin username and password.
+   Email may be left blank. Password typing is invisible; that is normal.
+   Never send your password in chat.
+
+4. When setup completes, double-click Start Clinic.bat.
+   The application should open in your browser automatically.
+   If needed, enter http://127.0.0.1:8000 in your browser.
+   Keep the clinic command window open while using the application.
+
+5. Sign in using the admin account you created.
+   - Users & access: create two Operator users and a Doctor user.
+   - Services: add Ultrasound, X-ray, CT, MRI and Doctor Consultation,
+     enter actual prices in PKR, and choose distinct token prefixes.
+   - Patients: register and search invented patients for testing.
+   - Sign out and sign in as another role to check access restrictions.
+
+Use sample data only. This package is for testing on ONE Windows computer.
+It uses a local development database and is not yet a multi-computer clinic
+installation. Once installed, normal use does not need internet.
+
+Included: login/roles, patient registration/search/editing, service prices,
+user management and an activity log.
+Not yet included: bookings, generated tokens, payments, discounts, refunds,
+diagnostic reports, financial reports or backup/restore.
+
+This ZIP contains source code and convenience launchers, not a standalone
+EXE installer. The application has passed its tests in the Linux cloud
+environment; the Windows launchers have not been run on a Windows machine.
+
+Your local records and generated signing key are stored in the .runtime
+folder after setup. Do not delete that folder or share it with others.
+Do not replace an existing installation containing data without a backup.
+If setup fails, keep its window open and share only the error text.

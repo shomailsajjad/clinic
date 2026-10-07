@@ -1,0 +1,14 @@
+{% extends 'base.html' %}
+{% block title %}{{ patient.name }}{% endblock %}
+{% block content %}
+<a class="back" href="{% url 'patient_list' %}">← Patients</a>
+<div class="page-heading"><div><p class="eyebrow">{{ patient.patient_number }}</p><h1>{{ patient.name }}</h1><p class="muted">Registered {{ patient.created_at|date:'d M Y' }}</p></div>{% if user.role != 'doctor' %}<a class="button secondary" href="{% url 'patient_edit' patient.pk %}">Edit patient</a>{% endif %}</div>
+<section class="panel"><h2>Patient information</h2><dl class="details">
+<div><dt>Age</dt><dd>{{ patient.age_display }}</dd></div><div><dt>Gender</dt><dd>{{ patient.get_gender_display }}</dd></div>
+<div><dt>Date of birth</dt><dd>{{ patient.date_of_birth|date:'d M Y'|default:'Not provided' }}</dd></div>
+<div><dt>Phone</dt><dd>{{ patient.phone|default:'Not provided' }}</dd></div><div><dt>CNIC</dt><dd>{{ patient.cnic|default:'Not provided' }}</dd></div>
+<div><dt>Referring doctor</dt><dd>{{ patient.referring_doctor|default:'Not provided' }}</dd></div>
+<div class="wide"><dt>Address</dt><dd>{{ patient.address|default:'Not provided'|linebreaksbr }}</dd></div>
+</dl></section>
+<section class="panel"><h2>Clinical history</h2><p>{{ patient.clinical_history|default:'No clinical history recorded.'|linebreaksbr }}</p></section>
+{% endblock %}

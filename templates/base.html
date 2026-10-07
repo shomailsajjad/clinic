@@ -1,0 +1,32 @@
+{% load static %}<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Clinic portal{% endblock %} · Sajjad Poly Clinic</title>
+<link rel="stylesheet" href="{% static 'clinic/app.css' %}"></head>
+<body>
+<aside class="sidebar">
+  <a class="brand" href="{% url 'dashboard' %}"><span class="brand-mark" aria-hidden="true">✚</span><span>Sajjad Poly Clinic<small>and Diagnostic Center</small></span></a>
+  {% if user.is_authenticated %}
+  <p class="nav-label">WORKSPACE</p>
+  <nav aria-label="Main navigation">
+    <a href="{% url 'dashboard' %}" {% if request.resolver_match.url_name == 'dashboard' %}aria-current="page"{% endif %}>Overview</a>
+    <a href="{% url 'patient_list' %}" {% if 'patient' in request.resolver_match.url_name %}aria-current="page"{% endif %}>Patients</a>
+    <a href="{% url 'service_list' %}" {% if 'service' in request.resolver_match.url_name %}aria-current="page"{% endif %}>Services</a>
+    {% if user.role == 'admin' %}
+    <a href="{% url 'staff_list' %}" {% if 'staff' in request.resolver_match.url_name %}aria-current="page"{% endif %}>Users & access</a>
+    <a href="{% url 'audit_list' %}" {% if request.resolver_match.url_name == 'audit_list' %}aria-current="page"{% endif %}>Activity log</a>
+    {% endif %}
+  </nav>
+  <div class="sidebar-footer"><strong>{{ user.get_full_name|default:user.username }}</strong><span>{{ user.get_role_display }} portal</span>
+    <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="signout" type="submit">Sign out</button></form>
+  </div>
+  {% else %}<p class="sidebar-note">Patient care, thoughtfully organized.</p>{% endif %}
+</aside>
+<main>
+  <header class="topbar"><span>Dr. Asfa Batool <small>FCPS Radiology, MBBS</small></span><span class="chip">Clinic workspace</span></header>
+  <div class="content">
+  {% for message in messages %}<div class="notice {{ message.tags }}" role="status">{{ message }}</div>{% endfor %}
+  {% block content %}{% endblock %}
+  </div>
+</main>
+</body></html>

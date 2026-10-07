@@ -1,0 +1,15 @@
+{% extends 'base.html' %}
+{% block title %}Sign in{% endblock %}
+{% block content %}
+<section class="login-card panel">
+  <p class="eyebrow">SAJJAD POLY CLINIC AND DIAGNOSTIC CENTER</p>
+  <h1>Welcome back</h1><p class="muted">Sign in to your clinic workspace.</p>
+  <form method="post">{% csrf_token %}
+    {% if form.non_field_errors %}<div class="form-errors" role="alert">{{ form.non_field_errors }}</div>{% endif %}
+    {% for field in form %}<div class="field">{{ field.label_tag }}{{ field }}{{ field.errors }}</div>{% endfor %}
+    {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
+    <button class="button full" type="submit">Sign in</button>
+  </form>
+  <p class="muted small">Use the account assigned to you by the clinic administrator.</p>
+</section>
+{% endblock %}

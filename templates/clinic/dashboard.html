@@ -1,0 +1,13 @@
+{% extends 'base.html' %}
+{% block title %}Overview{% endblock %}
+{% block content %}
+<div class="page-heading"><div><p class="eyebrow">{{ user.get_role_display }} PORTAL</p><h1>Your clinic, at a glance</h1><p class="muted">Patient records and services in one place.</p></div>
+{% if user.role != 'doctor' %}<a class="button" href="{% url 'patient_create' %}">+ Register patient</a>{% endif %}</div>
+<div class="stats"><section class="panel stat"><span>Registered patients</span><strong>{{ patient_count }}</strong><a href="{% url 'patient_list' %}">View patient records →</a></section>
+<section class="panel stat"><span>Active services</span><strong>{{ service_count }}</strong><a href="{% url 'service_list' %}">View services →</a></section>
+<section class="panel stat"><span>Your workspace</span><strong class="role-name">{{ user.get_role_display }}</strong><p class="muted">{{ user.get_full_name|default:user.username }}</p></section></div>
+<section class="panel"><div class="section-heading"><h2>Recently registered patients</h2><a href="{% url 'patient_list' %}">View all</a></div>
+{% if recent_patients %}<div class="table-wrap"><table><thead><tr><th>Patient</th><th>Patient number</th><th>Age</th><th>Registered</th></tr></thead><tbody>
+{% for patient in recent_patients %}<tr><td><a href="{% url 'patient_detail' patient.pk %}">{{ patient.name }}</a></td><td>{{ patient.patient_number }}</td><td>{{ patient.age_display }}</td><td>{{ patient.created_at|date:'d M Y' }}</td></tr>{% endfor %}
+</tbody></table></div>{% else %}<div class="empty"><h3>No patients registered yet</h3><p>Patient records will appear here after registration.</p></div>{% endif %}</section>
+{% endblock %}

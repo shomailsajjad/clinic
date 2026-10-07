@@ -1,0 +1,8 @@
+{% extends 'base.html' %}
+{% block title %}Services{% endblock %}
+{% block content %}
+<div class="page-heading"><div><p class="eyebrow">CLINIC SERVICES</p><h1>Services & pricing</h1><p class="muted">Standard charges in Pakistani rupees.</p></div>{% if user.role == 'admin' %}<a class="button" href="{% url 'service_create' %}">+ Add service</a>{% endif %}</div>
+<section class="panel"><div class="table-wrap"><table><thead><tr><th>Service</th><th>Token prefix</th><th>Price (PKR)</th><th>Status</th>{% if user.role == 'admin' %}<th>Action</th>{% endif %}</tr></thead><tbody>
+{% for service in services %}<tr><td>{{ service.name }}</td><td>{{ service.token_prefix }}</td><td>{{ service.price|floatformat:2 }}</td><td><span class="chip {% if not service.is_active %}inactive{% endif %}">{% if service.is_active %}Active{% else %}Inactive{% endif %}</span></td>{% if user.role == 'admin' %}<td><a href="{% url 'service_edit' service.pk %}">Edit</a></td>{% endif %}</tr>
+{% empty %}<tr><td colspan="5" class="empty">No services configured. Admin can add services and set their prices.</td></tr>{% endfor %}</tbody></table></div></section>
+{% endblock %}
