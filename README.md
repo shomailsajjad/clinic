@@ -2,6 +2,10 @@
 
 Offline clinic software for Dr. Asfa Batool (FCPS Radiology, MBBS).
 
+**[See screenshots of the working application](docs/SCREENSHOTS.md)** — no
+installation or hosting payment needed. Images show invented patients and
+illustrative prices; they are a visual walkthrough, not an interactive demo.
+
 ## Implemented foundation
 
 - Admin, operator and doctor accounts with server-enforced permissions.

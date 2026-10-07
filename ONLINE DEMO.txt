@@ -3,6 +3,10 @@ ONLINE TESTING ON RENDER
 This prepares a browser-based demo, not the finished clinical system.
 The demo has no real patient data. Never enter real patient data.
 
+If Render requests payment or a card and you do not want to provide one,
+stop this optional deployment. Account billing requirements can differ.
+You can view docs/SCREENSHOTS.md on GitHub without deploying anything.
+
 1. Sign in at https://dashboard.render.com using GitHub.
 2. Choose New > Blueprint and connect shomailsajjad/clinic.
    If the repository is private, grant Render access to that repository.
